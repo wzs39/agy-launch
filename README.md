@@ -12,6 +12,16 @@ for violation of Terms of Service` 停用。复盘时发现老链路有个结构
 
 这个仓库把那件事变成一个参数。
 
+## 文件
+
+| 文件 | 作用 |
+|---|---|
+| `agy-launch.cmd` | 双击/命令行入口，纯 ASCII，只负责转交给 Python |
+| `agy-run.py` | 四种模式的实现 + 交互菜单（`interactive()`） |
+| `socks_forward.py` | SOCKS5 CONNECT 纯转发，不拆 TLS、不改响应体 |
+| `selftest_socks.py` | 证明 socks 通道是端到端 TLS |
+| `selftest_launch.py` | 证明三种模式都能把参数转发给 agy |
+
 ---
 
 ## 四种模式
@@ -183,8 +193,13 @@ ok    socks reports the socks5h proxy
 
 ## 兼容性
 
-路径按默认安装位置硬编码在 `agy-run.py` 顶部，换机器改 `AGY_EXE` / `GUI_EXE`
-（或用环境变量 `LOCALAPPDATA` 间接生效）。
+路径按默认安装位置推导（`LOCALAPPDATA`），换机器无需改动。若装到别处，改
+`agy-run.py` 顶部的 `AGY_EXE` / `GUI_EXE` 两行。
+
+## 相关文档
+
+- [`LAUNCH-MODES.md`](LAUNCH-MODES.md) — 中文操作说明与设计理由
+- [`CHANGELOG.md`](CHANGELOG.md) — 版本记录，含开发过程中修掉的四个真实 bug
 
 ## License
 
