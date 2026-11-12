@@ -1,0 +1,36 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Runtime artefacts this project produces
+selftest-socks.log
+selftest-launch.log
+socks-forward.log
+mitm-proxy.log
+*.log
+*.log.old
+
+# Local probes / scratch
+selftest-input.txt
+t1.log
+
+# The MITM rewrite plugin is intentionally NOT part of this repo.
+# Provide your own agy_unlock_addon.py if you need --mode mitm.
+agy_unlock_addon.py
+agy_unlock_addon.py.*
+
+# Editor / OS
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Secrets that must never be committed
+*.pem
+*.key
+*.pfx
+*.cer
+*.crt
+.env

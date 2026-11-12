@@ -1,0 +1,7 @@
+# Normalise line endings on commit so the repo does not churn.
+# .cmd must stay CRLF for cmd.exe; Python and Markdown are LF.
+* text=auto eol=lf
+*.cmd text eol=crlf
+*.bat text eol=crlf
+*.py text eol=lf
+*.md text eol=lf
