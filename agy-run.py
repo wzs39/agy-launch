@@ -38,8 +38,12 @@ Examples
 """
 
 import argparse
+import csv
+import io
 import json
+import locale
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -57,6 +61,14 @@ MITM_LOG = os.path.join(HERE, "mitm-proxy.log")
 
 DEFAULT_SOCKS_PORT = 1080
 DEFAULT_MITM_PORT = 18080
+
+# Anything that can start mitmdump / the rewriting addon. Checked against the
+# full "Task To Run" column of `schtasks /query /v`, and against Startup-folder
+# shortcut names. Deliberately broad: a false "check this" line is cheaper than
+# a watchdog that silently restores the proxy ten minutes after you disabled it.
+_MITM_ACTION_RE = re.compile(
+    r"mitmdump|agy[_-]?unlock|agy[_-]?proxy|mitm[_-]?ensure|"
+    r"unlock[_-]?proxy|divert[_-]?(silent|watchdog|ensure)", re.I)
 
 
 def say(*parts):
@@ -233,6 +245,25 @@ def launch_gui(mode, port):
 
 # -------------------------------------------------------------------- status
 
+def _task_state(name):
+    """'Ready' / 'Disabled' / 'Running' for one scheduled task, else None.
+
+    schtasks CSV has no state column, so this needs the LIST form and a parse.
+    Kept separate so a parse failure degrades to "unknown", not to a crash and
+    not to a false "enabled".
+    """
+    try:
+        out = subprocess.run(["schtasks", "/query", "/tn", name, "/fo", "LIST"],
+                             capture_output=True, text=True, timeout=15)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    for line in (out.stdout or "").splitlines():
+        key, _, value = line.partition(":")
+        if key.strip().lower() == "status":
+            return value.strip() or None
+    return None
+
+
 def print_status(socks_port, mitm_port):
     say("=" * 68)
     say("agy launch status")
@@ -278,28 +309,55 @@ def print_status(socks_port, mitm_port):
     except (OSError, subprocess.SubprocessError) as exc:
         say("  could not query cert store: %s" % exc)
 
-    # mitm-ensure.cmd used to be scheduled every five minutes; if that task is
-    # still registered, --mode direct is undone minutes later by a background
-    # mitmdump nobody asked for. Surface it instead of silently fighting it.
+    # Guard tasks that resurrect the MITM proxy behind your back. Name matching
+    # is not enough: the one that actually respawned mitmdump on this machine is
+    # "\DSH-AgyUnlockProxy", which contains neither "mitm" nor "unlock" in a
+    # form the old filter caught. Inspect the "Task To Run" column instead.
     say("\n[autostart]")
     try:
-        out = subprocess.run(["schtasks", "/query", "/fo", "CSV", "/nh"],
-                             capture_output=True, text=True, timeout=20)
-        hits = [line.split(",")[0].strip('"') for line in (out.stdout or "").splitlines()
-                if "mitm" in line.lower()]
-        if hits:
-            say("  scheduled tasks touching mitmproxy: %s" % ", ".join(sorted(set(hits))))
-            say("  -> these respawn mitmdump; disable with:")
-            for name in sorted(set(hits)):
-                say("     schtasks /change /tn \"%s\" /disable" % name)
-        else:
-            say("  none (no scheduled task will resurrect mitmdump behind you)")
+        out = subprocess.run(["schtasks", "/query", "/fo", "CSV", "/v", "/nh"],
+                             capture_output=True, timeout=25)
+        encoding = locale.getpreferredencoding(False) or "mbcs"
+        try:
+            text = (out.stdout or b"").decode(encoding, "replace")
+        except LookupError:
+            text = (out.stdout or b"").decode("utf-8", "replace")
+        names = sorted({row[1].strip().strip('"')
+                        for row in csv.reader(io.StringIO(text))
+                        if len(row) > 8 and _MITM_ACTION_RE.search(" ".join(row))})
     except (OSError, subprocess.SubprocessError) as exc:
         say("  could not query schtasks: %s" % exc)
+        names = []
+
+    # Startup-folder shortcuts are a second, task-manager-invisible source.
+    startup = os.path.join(os.environ.get("APPDATA", ""), "Microsoft", "Windows",
+                           "Start Menu", "Programs", "Startup")
+    try:
+        shortcuts = sorted(f for f in os.listdir(startup)
+                           if _MITM_ACTION_RE.search(f))
+    except OSError:
+        shortcuts = []
+
+    if not names and not shortcuts:
+        say("  none (no autostart will resurrect mitmdump behind you)")
+    for name in names:
+        state = _task_state(name)
+        if state == "Disabled":
+            say("  %-34s Disabled  (already neutralised)" % name)
+        elif state is None:
+            say("  %-34s state unknown" % name)
+        else:
+            say("  %-34s %s  <-- will respawn mitmdump; disable with:"
+                % (name, state))
+            say("     schtasks /change /tn \"%s\" /disable" % name)
+    for f in shortcuts:
+        say("  Startup\\%-24s %s" % (os.path.basename(f),
+                                     "check: this may also start the proxy"))
 
     say("\n[next]")
-    say("  python agy-run.py --mode direct --target cli -- -p \"hello\"")
-    say("  python agy-run.py --mode socks  --target cli -- -p \"hello\"")
+    say("  agy --version                     :: direct, no proxy")
+    say("  agy --mode socks -- -p \"hello\"  :: socks5, TLS end-to-end")
+    say("  agy launch                       :: interactive menu")
     return 0
 
 

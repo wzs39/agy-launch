@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.1.0 — 2026-11-13
+
+把「直接敲 `agy`」这件事也收进来，并堵住后台自愈。
+
+### 新增
+
+- `agy.cmd` — 可选 PATH 垫片，替换那个无条件起 mitmdump 的旧包装器；`agy` 现在
+  默认直连，`agy launch` 才开菜单，缺 Python 时回落真 exe 而**不会**回落到 MITM。
+- `[autostart]` 现在读 `schtasks /query /v` 的 *Task To Run* 列，不再按任务名猜。
+  之前只匹配 `mitm`，漏掉了真正每 10 分钟拉起代理的 `\DSH-AgyUnlockProxy`，
+  status 却显示「none」。同时列出 Startup 文件夹里可能自启的快捷方式。
+
+### 修复
+
+- `schtasks` 输出按控制台代码页（cp936）编码，用 `text=True` 读会在某个
+  `0xaa` 字节上抛 `UnicodeDecodeError`，整个查询被吞掉 → status 误报「无自启任务」。
+  改为 `capture_output` 拿 bytes，按 `locale.getpreferredencoding()` 解码且
+  `errors="replace"`。
+- 端口健康检查（`port_open`）会连接后立刻断开，不发送任何 SOCKS 字节；此前
+  `handle()` 把这种 EOF 当错误记进 `socks-forward.log`，每 10 分钟一条噪声把真正
+  的故障淹掉。现在 greeting 阶段的 `IncompleteReadError` 静默返回。
+
+### 环境处置（本机，非仓库内容）
+
+三条自愈任务全部 Disabled，其中 `\DSH-AgyUnlockProxy` 需要 UAC 提权才能改；
+运行中的 mitmdump 已停，18080 / 1080 已释放。这些内容**不随仓库分发**。
+
 ## 1.0.0 — 2026-11-13
 
 首个可发布版本。起因是一次账号停用（`This service has been disabled in this

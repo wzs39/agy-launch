@@ -16,11 +16,42 @@ for violation of Terms of Service` 停用。复盘时发现老链路有个结构
 
 | 文件 | 作用 |
 |---|---|
+| `agy.cmd` | **可选**：替换 PATH 里的旧包装器，让 `agy` 默认直连（`agy launch` 开菜单） |
 | `agy-launch.cmd` | 双击/命令行入口，纯 ASCII，只负责转交给 Python |
 | `agy-run.py` | 四种模式的实现 + 交互菜单（`interactive()`） |
 | `socks_forward.py` | SOCKS5 CONNECT 纯转发，不拆 TLS、不改响应体 |
 | `selftest_socks.py` | 证明 socks 通道是端到端 TLS |
 | `selftest_launch.py` | 证明三种模式都能把参数转发给 agy |
+
+### `agy` 这个名字归谁
+
+`agy.cmd` 只在一种情况下有用：你的 PATH 里 `agy` 当前解析到的是那个**无条件启动
+mitmdump 的旧包装器**。实测本机就是如此：
+
+```
+> where agy
+C:\Users\qwe\.dsh\agy-unlock\agy.cmd     <- PATH 顺序在前，命中它
+C:\Users\qwe\AppData\Local\agy\bin\agy.exe
+```
+
+因为 `.dsh\agy-unlock` 排在 `AppData\Local\agy\bin` 前面，敲 `agy` 等于走 MITM。
+替换之后：
+
+```bat
+agy                        :: direct，无代理
+agy -p "hello"             :: direct，参数原样转发
+agy --mode socks -p "hi"   :: 显式模式
+agy launch                 :: 交互菜单
+```
+
+替换前留一份原件 `agy.cmd.old`，随时可以改回去。若你的 PATH 里没有那个旧脚本，
+这个文件用不上 —— 直接 `agy.exe` 或 `agy-launch.cmd` 即可。
+
+**还有一个坑**：即便换掉了包装器，机器上仍可能有计划任务定期把 mitmdump 拉起来。
+`--mode status` 的 `[autostart]` 会列出这些任务及其 Enabled/Disabled 状态；本机
+实测有三条（`\agy-mitm-keepalive`、`\DSH-AgyUnlockProxy`、
+`\AntigravityArmor-Divert-Watchdog`），全部需要 disable 才能保证「direct」不被
+后台进程悄悄改写。
 
 ---
 

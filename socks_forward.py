@@ -199,7 +199,14 @@ def _report(host, port, exc):
 async def handle(creader, cwriter, upstream):
     swriter = None
     try:
-        if not await _greet(creader, cwriter):
+        try:
+            greeted = await _greet(creader, cwriter)
+        except asyncio.IncompleteReadError:
+            # A bare TCP connect-then-close (port liveness check, scanner) sends
+            # no greeting at all. That is not a proxy failure -- logging it just
+            # buries the real errors under one line per health check.
+            return
+        if not greeted:
             return
         req = await _read_request(creader)
         if req is None:
